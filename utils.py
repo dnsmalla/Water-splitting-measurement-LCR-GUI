@@ -7,7 +7,7 @@ __version__ = "1.0.1"
 
 # importing library
 
-import visa 
+import pyvisa as visa
 import numpy as np
 import time
 import logging
@@ -113,6 +113,7 @@ def initInstrument_1(inst_handle_1,do_reset):
             inst_handle_1.write("*RST")   
         inst_handle_1.write("*CLS")
         setdefaultParameters_1(inst_handle_1)
+        inst_handle_1.timeout=25000
         return name
     except:
         logging.getLogger().error("openVisaResource ERROR",exc_info=True)
@@ -241,10 +242,7 @@ def setdefaultParameters_2(inst_handle_2):
         return "setdefaultParameters error"
 
     
-
-
-    
-def setCorrectionParameters(inst_handle_1,calc_1,calc_2,cable_length):
+def setMeasurementParameters(inst_handle_1,calc_1,calc_2):
     ''' 
     setCorrectionParameters(inst_handle,calc_1,calc_2,cable_length)
                             
@@ -263,12 +261,10 @@ def setCorrectionParameters(inst_handle_1,calc_1,calc_2,cable_length):
         
         command= ''':SENS:CORR:OPEN ON
                     ;:SENS:CORR:SHOR ON
-                    ;:CAL:CABL {clen}
                     ;:AVER:COUN 100
                     ;:AVER:ON
                 ;:CALC1:FORM {calc_1}
                 ;:CALC2:FORM {calc_2}'''.format(
-                clen=str(cable_length),
                 calc_1=calc_1,
                 calc_2=calc_2)
                 
@@ -280,7 +276,7 @@ def setCorrectionParameters(inst_handle_1,calc_1,calc_2,cable_length):
         return " setCorrectionParameters error"
     
 def setSignalLevelAndFrequency(inst_handle_1,frequency,                               
-                               ac_signl):
+                               ac_signl,cable_length):
     ''' 
     SetSignalLevelAndFrequency(inst_handle,frequency,                                          
                                is_voltage_signal)
@@ -291,8 +287,10 @@ def setSignalLevelAndFrequency(inst_handle_1,frequency,
         
     try:
         command= ''':SOUR:FREQ {freq}
+                    ;:CAL:CABL {clen}
                     ;:SOUR:VOLT {isV}'''.format(
                     freq=frequency,
+                    clen=str(cable_length),
                     isV=str(ac_signl))
         inst_handle_1.write(command)
         return 1
@@ -412,9 +410,6 @@ def runCVLoop(inst_handle_1,inst_handle_2,VBias,filename,parent,time_s):
     elif (calc_1 == 'Cs'):
         xaxis1='Cp(F)' 
         xaxis2='Q'
-    elif (calc_1 == 'Z'):
-        xaxis1='Rs(ohm)' 
-        xaxis2='D'
     elif (calc_1 == 'CPRP'):
         xaxis1='Cp(F)' 
         xaxis2='G(s)'
@@ -474,7 +469,152 @@ def runCVLoop(inst_handle_1,inst_handle_2,VBias,filename,parent,time_s):
         logging.getLogger().error("runCVLoop ERROR", 
                                    exc_info=True)
         print('runCVLoop ERROR')
+        return -1 
+
+def fetchData_imp(inst_handle_1,frq_n,delay):
+    ''' 
+    fetchData(inst_handle):
+    
+    Fetches the data
+    
+    Arguments:
+    
+    inst_handle:instrument handle from 'openVisaResource()'
+    
+    '''
+    
+    WAIT_TIME_SEC=1.0
+
+    
+    try:
+        #inst_handle_1.write(':SENS:FIMP:RANG 10E+3') #range is specified in impedance
+        #inst_handle_1.write(':SENS:CONT:VER ON')
+        inst_handle_1.write(':SENS:FRES:RANG:AUTO ON')
+        inst_handle_1.write(':SOUR:FREQ {}'.format(frq_n))
+        inst_handle_1.write(':SOUR:CURR 2E-4')
+        if frq_n>10000:
+            inst_handle_1.write(':SENS:AVER:COUN 100')
+            delay=1
+        elif frq_n>1000:
+            inst_handle_1.write(':SENS:AVER:COUN 100')
+            delay=1
+        elif frq_n>10:
+            inst_handle_1.write(':SENS:AVER:COUN 100')
+            delay=1
+        elif frq_n>1:
+            inst_handle_1.write(':SENS:AVER:COUN 10')
+            delay=1
+        elif frq_n>0.5:
+            inst_handle_1.write(':SENS:AVER:COUN 10')
+            delay=1
+        elif frq_n>0.1:
+            inst_handle_1.write(':SENS:AVER:COUN 3')
+            delay=5
+        elif frq_n>0.05:
+            inst_handle_1.write(':SENS:AVER:COUN 2')
+            delay=10
+        else:
+            inst_handle_1.write(':SENS:AVER:COUN 1')
+            delay=10
+        #inst_handle_1.write(':INIT:COUNT OFF')
+        inst_handle_1.write(':TRIG:SOUR INT') #always trig from the external
+        inst_handle_1.write(':INIT:COUNT ON')
+        #time.sleep(delay)# to make sleep to measure data
+        while(True):
+            time.sleep(delay)
+            values=inst_handle_1.query_ascii_values(':READ?',separator=',', container=np.array)
+            print(values)
+            if values[0] != -1:
+                break
+        return values
+    except:
+        logging.getLogger().error("fetchData ERROR", 
+                                   exc_info=True)
+        print('fetchData ERROR')
+        return -1     
+
+
+def runIMPLoop(inst_handle_1,inst_handle_2,freq_g,filename,parent,time_s):
+    ''' 
+    fetchData(inst_handle):
+    
+    Fetches the data
+    
+    Arguments:
+    
+    inst_handle:instrument handle from 'openVisaResource()'
+    freq_g:Array with frequency data points at which to measure impedance
+    Calcuation_1-->["Z","Rs"])
+    calculation_2-->["PHAS","D"]
+    
+    '''
+    #if inst_handle==None:
+        #inst_handle=openVisaResource("2")
+        #setdefaultParameters(inst_handle)
+    print("inst2",inst_handle_2)
+
+    calc_1=Calc_1[0] # set calculation 1 for data save
+    calc_2=Calc_2[0] # set calculation 2 for data save
+    C1_data = [] #list for calculation data 1
+    C2_data = [] #list for calculation data 2
+    #set data save path to data folder 
+    os.makedirs('./Data/', exist_ok=True)
+    save_path = './Data/'
+    #make file name using date and time at measuring time
+    if filename==None:
+        filename=strftime("%Y-%m-%d-%H-%M-%S", gmtime())
+        name=filename+".csv"
+    else:
+        f=strftime("%Y-%m-%d-%H-%M-%S", gmtime())
+        name=f+filename+".csv"
+    print(filename)
+    fullName = os.path.join(save_path,name ) 
+    # fullname is file save path csv file 
+    f = open(fullName, 'w+')
+    #set header for csv file according to calcualtion 1 and calcualtion 2
+    if (calc_1 == 'Z'):
+        xaxis1='Rs(ohm)' 
+        xaxis2='theta'
+    elif (calc_1 == 'Rs'):
+        xaxis1='Rs(ohm)' 
+        xaxis2='theta'
+    #set the column of csv
+    f.write('Impedance,  Theta ,'+xaxis1+', '+xaxis2+'\r')
+    f.close() # file close
+    parent.update_x_y(xaxis1,xaxis2) # for GUI Data column update 
+    parent.clear_data() # clear GUI data 
+
+    try:
+    
+        for j,frq in enumerate(freq_g):
+            parent.update_status("Running")
+            #Set Bias Voltage - Turn on Bias Voltage - Pause - Read Front Panel
+            time.sleep(time_s) # sleep for time sleep set in GUI set 
+            data=fetchData_imp(inst_handle_1,frq,time_s)#Get Capacitance Reading
+            #data=np.random.random(3)# to test the GUI
+            print("this is data fetched",data,frq)
+            C1 = data[1]
+            C2 = data[2] 
+
+            f = open(fullName, 'a')
+            f.write(str(frq)+ ',' + str(C1) + ',' + str(C2) + '\r')
+            f.close()
+           
+            C1_data.append(C1)  # append data to list calcualtion1
+            C2_data.append(C2)  # append data to list calcualtion2
+
+            parent.update_data(frq,C1,C2,j) # GUI data update
+            parent.update_()    # update GUI show
+        
+        fetchData(inst_handle_1,0,time_s)
+        parent.update_status("End") # GUI status update 
+        parent.No_update()          # call GUI no update 
+        parent.clear_plot()         # call GUI plot clear
+        parent.updatePlot_imp(freq_g,C1_data,C2_data,xaxis1,xaxis2) # to update the GUI plot
+        
+    except:
+        parent.update_status("ERROR")
+        logging.getLogger().error("runCVLoop ERROR", 
+                                   exc_info=True)
+        print('runCVLoop ERROR')
         return -1       
-
-
-   

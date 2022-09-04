@@ -27,14 +27,14 @@ class InitFrame(ttk.Frame):
         """
         self.gpib_add1=StringVar(self)
         self.gpib_add2=StringVar(self)
-        self.reset=IntVar(self)
+        self.experiment=IntVar(self)
         self.gpib1=IntVar(self)
         self.gpib2=IntVar(self)
         self.insts_name=StringVar(self)
         self.gpib_add1.set(str(2)) # set LCR meter GPIB--2
         self.gpib_add2.set(str(16))# set Multi meter GPIB--14
         #self.gpib_add2.set(str(8))# set Multi meter GPIB--8
-        self.reset.set(1)
+        self.experiment.set(1)
         self.gpib1.set(1) # for selecting gpib 1
         self.gpib2.set(1) # for selecting gpib 2
 
@@ -59,7 +59,7 @@ class InitFrame(ttk.Frame):
         self.add2_number.grid(row=1, column=1, rowspan=1, columnspan=1,
                        sticky=W + E + N + S)
         #reset 
-        self.reset_option = ttk.Checkbutton(main_frame, text="Reset?",variable=self.reset)
+        self.reset_option = ttk.Checkbutton(main_frame, text="Experiment?",variable=self.experiment)
         self.reset_option.grid(row=2, column=0, rowspan=1, columnspan=1,
                        sticky=W + E + N + S)
         #reset gpig-1
@@ -101,7 +101,11 @@ class InitFrame(ttk.Frame):
         self.parent.update_()
         print ("Initializing Instrument.................")
         
-        if self.gpib2.get() and self.gpib1.get(): # if gpib 1 and 2 are selected
+        if self.experiment.get()!=1:
+            self.parent.compare=1
+            self.parent.compare_mode()
+    
+        elif self.gpib2.get() and self.gpib1.get(): # if gpib 1 and 2 are selected
             self.inst_handle_1=(openVisaResource_1(self.gpib_add1.get(),self.parent))
             n_1=initInstrument_1(self.inst_handle_1,self.reset.get())[16:22]
             self.inst_handle_2=(openVisaResource_2(self.gpib_add2.get(),self.parent))

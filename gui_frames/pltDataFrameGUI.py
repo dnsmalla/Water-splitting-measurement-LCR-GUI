@@ -6,11 +6,14 @@ matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from tkinter import ttk
+from EIS_fiting.visualization import plot_nyquist
 		
 class PltDataFrame(Frame):
     def __init__(self, master,V_data=[],Cp_data=[],Gp_data=[]):
         ttk.Frame.__init__(self, master, padding=(10, 10, 10, 10)) # super class initialization
         self.f = Figure(figsize=(8,4), dpi=100) # figur size and dpi setting
+        self.f_ = Figure(figsize=(6,4), dpi=100) # figur size and dpi setting
+ 
  
     def updatePlot(self,V_data,Cp_data,Gp_data,xaxis1,xaxis2):
         """ 
@@ -61,3 +64,61 @@ class PltDataFrame(Frame):
         toolbar = NavigationToolbar2Tk(canvas, self)
         toolbar.update()
         canvas._tkcanvas.pack(expand=True)
+
+    def updatePlot_imp(self,frq,Cp_data,Gp_data,xaxis1,xaxis2):
+        """ 
+        main plot setting
+        containt:- 
+        - subplot 
+        - axis
+        - plot
+        - setting
+        - color
+        - FigureCanvasTkAgg
+        """
+        self.ax1 = self.f.add_subplot(111)
+        self.ax2 = self.ax1.twinx()
+        t = frq
+        s1 = Cp_data #self.Cp_data
+        s2 = Gp_data
+        xaxis1="Frequency"
+
+        self.ax1.plot(t, s1, 'b-')
+        self.ax1.set_title('Data Plot')
+        self.ax1.set_xlabel('Frequency')
+        self.ax1.set_ylabel(xaxis1, color='b')
+        self.ax1.tick_params('y', colors='b')
+        #self.ax1.ticklabel_format(style='sci', scilimits=(0,0))
+        
+        
+        
+        self.ax2.plot(t, s2, 'r.')
+        self.ax2.set_ylabel(xaxis2, color='r')
+        self.ax2.tick_params('y', colors='r')
+        self.ax2.ticklabel_format(style='sci',scilimits=(0,0))
+
+        
+
+        canvas = FigureCanvasTkAgg(self.f,self)
+        canvas.draw()
+        canvas.get_tk_widget().pack(expand=True)
+
+        toolbar = NavigationToolbar2Tk(canvas, self)
+        toolbar.update()
+        canvas._tkcanvas.pack(expand=True)
+
+    def showPlot(self,Z,Z_fit):
+    
+        ax = self.f_.add_subplot(111)
+
+        plot_nyquist(ax, Z, fmt='o')
+        plot_nyquist(ax, Z_fit, fmt='-')
+
+        canvas = FigureCanvasTkAgg(self.f_,self)
+        canvas.draw()
+        canvas.get_tk_widget().pack(expand=True)
+
+        toolbar = NavigationToolbar2Tk(canvas, self)
+        toolbar.update()
+        canvas._tkcanvas.pack(expand=True)
+
